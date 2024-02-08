@@ -21,7 +21,7 @@ function Ktl($, appInfo) {
     if (window.ktl)
         return window.ktl;
 
-    const KTL_VERSION = '0.22.10';
+    const KTL_VERSION = '0.22.11';
     const APP_KTL_VERSIONS = window.APP_VERSION + ' - ' + KTL_VERSION;
     window.APP_KTL_VERSIONS = APP_KTL_VERSIONS;
 
@@ -4612,7 +4612,7 @@ function Ktl($, appInfo) {
             $('#' + e.target.id).append(menuDiv);
 
             var pos = ktl.core.setContextMenuPostion(e, $('.menuDiv'));
-            $('.menuDiv').css({ 'left': pos.x + 'px', 'top': pos.y + 'px', 'z-index': 2 });
+            $('.menuDiv').css({ 'left': pos.x + 'px', 'top': pos.y + 'px' });
 
             var ul = document.createElement('ul');
             menuDiv.appendChild(ul);
@@ -6169,7 +6169,6 @@ function Ktl($, appInfo) {
 
             function execFieldKw(keyword) {
                 if (!ktl.core.hasRoleAccess(keyword.options)) return;
-
                 const paramGroups = keyword.params;
                 if (paramGroups.length < 2 && paramGroups.length % 2 != 0) return; // Check if the number of parameter groups is even
 
@@ -6182,12 +6181,14 @@ function Ktl($, appInfo) {
 
                 for (let i = 0; i < paramGroups.length; i += 2) {
                     const [firstParam, viewOptions] = paramGroups.slice(i, i + 2);
-                    const ttipText = firstParam.map(item => item.trim()).join(', ');
+                    const ttipText = firstParam[0];
                     const viewOptionTxt = viewOptions[0];
+                    const tooltipIcon = firstParam[1];
+                    console.log({firstParam});
 
                     ['f', 'l', 'd', 't'].forEach(option => {
                         if (viewOptionTxt.includes(option) && tooltipPositions[option]) {
-                            ktl.views.addTooltipsToFields(viewId, ttipText, viewType, tooltipPositions[option]);
+                            ktl.views.addTooltipsToFields(viewId, ttipText, viewType, tooltipPositions[option], tooltipIcon);
                         }
                     });
                 }
@@ -6196,6 +6197,7 @@ function Ktl($, appInfo) {
             //Process views keyword
             if (keywords && keywords[kw] && keywords[kw].length && keywords[kw][0].params && keywords[kw][0].params.length) {
                 const kwList = ktl.core.getKeywordsByType(viewId, kw);
+                console.log({kwList});
                 for (var kwIdx = 0; kwIdx < kwList.length; kwIdx++) {
                     execKw(kwList[kwIdx]);
                 }
@@ -6205,13 +6207,15 @@ function Ktl($, appInfo) {
                     if (!ktl.core.hasRoleAccess(options)) return;
 
                     const paramGroups = kwInstance.params;
+                    console.log({paramGroups});
                     if (paramGroups.length < 2 && paramGroups.length % 2 != 0) return; // Check if the number of parameter groups is even
 
                     const tooltipIconPositions = [];
                     for (let i = 0; i < paramGroups.length; i += 2) {
                         const [firstParam, fieldLabel] = paramGroups.slice(i, i + 2);
-                        const ttipText = firstParam.map(item => item.trim()).join(', ');
+                        const ttipText = firstParam[0];
                         fieldId = ktl.fields.getFieldIdFromLabel(viewId, fieldLabel[0]);
+                        const tooltipsIcon = firstParam[1];
 
                         let tooltipIconPosition;
                         const viewSelector = `#${viewId}`;
@@ -6241,11 +6245,11 @@ function Ktl($, appInfo) {
                                 tooltipIconPosition = fieldId ? `${viewSelector} .${fieldId} .kn-detail-label` : `${viewSelector} .kn-details-link .kn-detail-body:textEquals("${fieldLabel[0]}")`;
                                 break;
                         }
-                        tooltipIconPositions.push({ position: tooltipIconPosition, text: ttipText });
+                        tooltipIconPositions.push({ position: tooltipIconPosition, text: ttipText, icon: tooltipsIcon });
                     }
 
-                    tooltipIconPositions.forEach(({ position, text }) => {
-                        if ($(position).length) ktl.views.addTooltipsToFields(viewId, text, viewType, position);
+                    tooltipIconPositions.forEach(({ position, text, icon }) => {
+                        if ($(position).length) ktl.views.addTooltipsToFields(viewId, text, viewType, position, icon);
                     });
                 }
             }
@@ -7999,7 +8003,10 @@ function Ktl($, appInfo) {
                                         Knack.views[viewId].renderView && Knack.views[viewId].renderView();
                                         Knack.views[viewId].renderResults && Knack.views[viewId].renderResults();
                                     }
-                                    Knack.views[viewId].render();
+
+                                    if (!Knack.views[viewId].renderResults) //This erases Search results in Search views.
+                                        Knack.views[viewId].render();
+
                                     Knack.views[viewId].postRender && Knack.views[viewId].postRender(); //This is needed for menus.
                                     return resolve();
                                 } else {
@@ -10232,44 +10239,156 @@ function Ktl($, appInfo) {
             },
 
             truncateText: function (view, keywords) {
-                const kw = '_trk';
-                if (!view || !keywords || (keywords && !keywords[kw])) return;
-
-                if (keywords[kw].length && keywords[kw][0].options) {
-                    const options = keywords[kw][0].options;
-                    if (!ktl.core.hasRoleAccess(options)) return;
+            const kw = '_trk'; // @params = [colHeader, replaceWith, icon]
+            console.log({kw});
+            const { key: viewId, type: viewType } = view;
+            console.log({viewId});
+            // const keywords = ktlKeywords[viewId];
+            // console.log({keywords});
+            if (!viewId) return;
+            //Process views keyword
+            if (keywords && keywords[kw] && keywords[kw].length && keywords[kw][0].params && keywords[kw][0].params.length) {
+                const kwList = ktl.core.getKeywordsByType(viewId, kw);
+                console.log({kwList}); // gets parameters
+                for (var kwIdx = 0; kwIdx < kwList.length; kwIdx++) {
+                    execKw(kwList[kwIdx]);
                 }
-
-                const viewType = view.type;
-                if (viewType === 'table') {
+                function execKw(kwInstance) {
+                    if (viewType === 'table') {
                     var columns = view.columns;
+                    console.log({columns});
+                    // add column positions
+                    columns.forEach((column, index) => {
+                        column.index = index;
+                    });
                     if (!columns) return;
-
                     try {
-                        columns.forEach(col => {
-                            var widthType = col.width.type;
-                            var widthUnits = col.width.units;
-                            if (widthType === 'custom' && widthUnits === 'px') {
-                                var widthAmount = col.width.amount;
+                        kwList[0].params.forEach(param => {
+                            const colHeader = param[0];
+                            const replaceWith = param[1];
+                            const icon = param[2];
+                            const col = columns.filter(col => col.header === colHeader)[0];
 
-                                if (col.type === 'field') {
-                                    if (col.field) {
-                                        var fieldId = col.field.key;
-                                        //Remove anything after field_xxx, like pseudo selectors with colon.
-                                        var extractedField = fieldId.match(/field_\d+/);
-                                        if (extractedField) {
-                                            fieldId = extractedField[0];
-                                            $('#' + view.key + ' td.' + fieldId + ' span').addClass('ktlTruncateCellText');
-                                            $('#' + view.key + ' td.' + fieldId + ' span').css('max-width', widthAmount + 'px');
+                            if (!col) return; // Exit if column not found
+
+                            const widthType = col.width.type;
+                            const widthUnits = col.width.units;
+                            
+                            // Check if replacement text is specified
+                            const replaceText = param.length >= 1;
+                            const iconExists = param.length >= 2;
+                            if (replaceText) {
+                                if (col.type === "field" && col.conn_link === "" && col.link_type === "") {
+                                    console.log("file");
+                                    $(`#${view.key}`).find(`td.${col.field.key} span`).each(function () {
+                                        if ($(this).text().trim() !== "") {
+                                            if (iconExists) {
+                                                console.log("icon exists");
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<i style='vertical-align: baseline !important;' class='fa-${icon}'></i><span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }                                            
+                                            else {
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }
                                         }
-                                    }
+                                    });
+                                }
+                                else if (col.type === "field" && col.conn_link === "") {
+                                    console.log("file");
+                                    $(`#${view.key}`).find(`td.${col.field.key} > a`).each(function () {
+                                        console.log("field link");
+                                        if ($(this).text().trim() !== "") {
+                                            $(this).find("a").html(`${replaceWith}`)
+                                            if (iconExists) {
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<i style='vertical-align: baseline !important;' class='fa-${icon}'></i><span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }
+                                            else if (!iconExists) {
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }
+                                        }
+                                    });
+                                } else if (col.type === "field" && col.conn_link !== "") {
+                                    $(`#${view.key}`).find(`td.${col.field.key} > a`).each(function () {
+                                        console.log("field link");
+                                        if ($(this).text().trim() !== "") {
+                                            $(this).find("a").html(`${replaceWith}`)
+                                            if (iconExists) {
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<i style='vertical-align: baseline !important;' class='fa-${icon}'></i><span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }
+                                            else if (!iconExists) {
+                                                this.style.setProperty('text-decoration', 'none', 'important');
+                                                $(this).html(`<span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                            }
+                                        }
+                                    });
+                                }
+                                else if (col.type === "link") {
+                                    console.log("link");
+                                    $(`#${view.key}`).find(`td.knTableColumn__link span.col-${col.index} > a`).each(function () {;
+                                        if ($(this).text().trim() !== "") {
+                                            this.style.setProperty('text-decoration', 'none', 'important');
+                                            $(this).html(`<i style='vertical-align: baseline !important;' class='fa ${icon}'></i><span style='text-decoration: none !important'>&nbsp;&nbsp;</span><span style="text-decoration: underline;">${replaceWith}</span>`)
+                                        }
+                                    });
                                 }
                             }
-                        })
+
+                            else if (widthType === 'custom' && widthUnits === 'px') {
+                                const widthAmount = col.width.amount;
+                                if (col.type === 'field' && col.field) {
+                                    var fieldId = col.field.key.match(/field_\d+/)[0];
+                                    $(`#${view.key} td.${fieldId} span`).addClass('ktlTruncateCellText').css('max-width', widthAmount + 'px');
+                                }
+                            }
+                        });
                     } catch (e) {
                         console.log('truncateText error:', e);
                     }
                 }
+            }
+        }
+            //     const kw = '_trk';
+            //     if (!view || !keywords || (keywords && !keywords[kw])) return;
+
+            //     if (keywords[kw].length && keywords[kw][0].options) {
+            //         const options = keywords[kw][0].options;
+            //         if (!ktl.core.hasRoleAccess(options)) return;
+            //     }
+
+            //     const viewType = view.type;
+            //     if (viewType === 'table') {
+            //         var columns = view.columns;
+            //         if (!columns) return;
+
+            //         try {
+            //             columns.forEach(col => {
+            //                 var widthType = col.width.type;
+            //                 var widthUnits = col.width.units;
+            //                 if (widthType === 'custom' && widthUnits === 'px') {
+            //                     var widthAmount = col.width.amount;
+
+            //                     if (col.type === 'field') {
+            //                         if (col.field) {
+            //                             var fieldId = col.field.key;
+            //                             //Remove anything after field_xxx, like pseudo selectors with colon.
+            //                             var extractedField = fieldId.match(/field_\d+/);
+            //                             if (extractedField) {
+            //                                 fieldId = extractedField[0];
+            //                                 $('#' + view.key + ' td.' + fieldId + ' span').addClass('ktlTruncateCellText');
+            //                                 $('#' + view.key + ' td.' + fieldId + ' span').css('max-width', widthAmount + 'px');
+            //                             }
+            //                         }
+            //                     }
+            //                 }
+            //             })
+            //         } catch (e) {
+            //             console.log('truncateText error:', e);
+            //         }
+            //     }
             },
 
             openLink: function (viewId, keywords) {
@@ -10712,11 +10831,14 @@ function Ktl($, appInfo) {
             },
 
             //Add a tooltip to a field label/header
-            addTooltipsToFields: function (viewId, tooltipText, viewType, tooltipIconPosition) {
+            addTooltipsToFields: function (viewId, tooltipText, viewType, tooltipIconPosition, tooltipIcon) {
                 if (!viewId || !viewType) return;
 
                 // console.log(tooltipIconPosition)
-                const icon = '<i class="fa fa-question-circle ktlTooltipIcon ktlTtipIcon-' + viewType + '-view"> </i>';
+                if(!tooltipIcon) {
+                    tooltipIcon = 'fa-question-circle';
+                }
+                const icon = `<i class="fa ${tooltipIcon} ktlTooltipIcon ktlTtipIcon-${viewType}-view"> </i>`;
 
                 // Add the tooltip icon to the DOM
                 $(tooltipIconPosition)
@@ -10727,7 +10849,8 @@ function Ktl($, appInfo) {
                     .css('display', 'inline-block');
 
                 // Add event listeners to show and hide the tooltip
-                $(document).on('mouseenter', `${tooltipIconPosition} i.fa-question-circle`, function (e) {
+                $(document).on('mouseenter', `${tooltipIconPosition} i.${tooltipIcon}`, function (e) {
+                    console.log("hover");
                     if (!$(".ktlTooltip").length) {
                         const tooltipElement = $(`<div class="ktlTooltip ktlTtip-${viewType}-view">${tooltipText}</div>`)
                         const icon = $(this);
@@ -10763,7 +10886,7 @@ function Ktl($, appInfo) {
                     }
                 });
 
-                $(document).on('mouseleave', `${tooltipIconPosition} i.fa-question-circle`, function () {
+                $(document).on('mouseleave', `${tooltipIconPosition} i.${tooltipIcon}`, function () {
                     $('.ktlTooltip').remove();
                 });
             },
@@ -12825,7 +12948,7 @@ function Ktl($, appInfo) {
 
         return {
             isDeveloper: function () {
-                return Knack.getUserRoleNames().includes('Developer') || (ktl.storage.lsGetItem('forceDevRole', true) === 'true');
+                return ( (Knack.getUserRoleNames().split(',').map((element) => element.trim()).includes('Developer')) || (ktl.storage.lsGetItem('forceDevRole', true) === 'true') );
             },
 
             isLoggedIn: function () {
@@ -13930,10 +14053,15 @@ function Ktl($, appInfo) {
                         var kw = {};
                         var fieldId = el.classList[0];
                         if (fieldId && fieldId.startsWith('field_')) {
-                            ktl.fields.getFieldKeywords(fieldId, kw);
-                            if (!$.isEmptyObject(kw)) {
-                                if (kw[fieldId]._lud || kw[fieldId]._lub)
-                                    kwNoCheckBox = true;
+                            const fieldType = ktl.fields.getFieldType(fieldId);
+                            if (fieldType === 'file') //Not supported in API calls.
+                                kwNoCheckBox = true;
+                            else {
+                                ktl.fields.getFieldKeywords(fieldId, kw);
+                                if (!$.isEmptyObject(kw)) {
+                                    if (kw[fieldId]._lud || kw[fieldId]._lub)
+                                        kwNoCheckBox = true;
+                                }
                             }
                         }
 
@@ -16188,3 +16316,4 @@ function getUrlParameter(name) {
 
 //window.ktlEnd = window.performance.now();
 //console.log(`KTL took ${Math.trunc(window.ktlEnd - window.ktlStart)} ms`);
+
